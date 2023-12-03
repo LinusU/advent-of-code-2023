@@ -1,7 +1,7 @@
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 enum Cell {
     Empty,
-    Symbol,
+    Symbol(char),
     Digit(u8),
 }
 
@@ -19,46 +19,48 @@ impl Cell {
             '7' => Ok(Cell::Digit(7)),
             '8' => Ok(Cell::Digit(8)),
             '9' => Ok(Cell::Digit(9)),
-            '-' => Ok(Cell::Symbol),
-            '@' => Ok(Cell::Symbol),
-            '*' => Ok(Cell::Symbol),
-            '/' => Ok(Cell::Symbol),
-            '&' => Ok(Cell::Symbol),
-            '#' => Ok(Cell::Symbol),
-            '%' => Ok(Cell::Symbol),
-            '+' => Ok(Cell::Symbol),
-            '=' => Ok(Cell::Symbol),
-            '$' => Ok(Cell::Symbol),
+            '-' => Ok(Cell::Symbol('-')),
+            '@' => Ok(Cell::Symbol('@')),
+            '*' => Ok(Cell::Symbol('*')),
+            '/' => Ok(Cell::Symbol('/')),
+            '&' => Ok(Cell::Symbol('&')),
+            '#' => Ok(Cell::Symbol('#')),
+            '%' => Ok(Cell::Symbol('%')),
+            '+' => Ok(Cell::Symbol('+')),
+            '=' => Ok(Cell::Symbol('=')),
+            '$' => Ok(Cell::Symbol('$')),
             _ => Err(format!("Invalid cell: {}", c)),
         }
     }
 }
 
 trait EngineSchematic {
-    fn cell_at(&self, x: usize, y: usize) -> Option<&Cell>;
-    fn has_symbol_adjecent(&self, x: usize, y: usize) -> bool;
-    fn height(&self) -> usize;
-    fn width(&self) -> usize;
+    fn cell_at(&self, x: isize, y: isize) -> Option<&Cell>;
+    fn has_symbol_adjecent(&self, x: isize, y: isize) -> bool;
+    fn height(&self) -> isize;
+    fn read_part_number(&self, x: isize, y: isize) -> u64;
+    fn width(&self) -> isize;
 }
 
 impl EngineSchematic for Vec<Vec<Cell>> {
-    fn cell_at(&self, x: usize, y: usize) -> Option<&Cell> {
-        self.get(y).and_then(|line| line.get(x))
+    fn cell_at(&self, x: isize, y: isize) -> Option<&Cell> {
+        if x < 0 || y < 0 {
+            return None;
+        }
+
+        self.get(y as usize).and_then(|line| line.get(x as usize))
     }
 
-    fn has_symbol_adjecent(&self, x: usize, y: usize) -> bool {
+    fn has_symbol_adjecent(&self, x: isize, y: isize) -> bool {
         let mut has_symbol_adjecent = false;
 
-        let start_x = if x == 0 { 0 } else { x - 1 };
-        let start_y = if y == 0 { 0 } else { y - 1 };
-
-        for y in start_y..=y + 1 {
-            for x in start_x..=x + 1 {
+        for y in (y - 1)..=(y + 1) {
+            for x in (x - 1)..=(x + 1) {
                 if x == 0 && y == 0 {
                     continue;
                 }
 
-                if let Some(Cell::Symbol) = self.cell_at(x, y) {
+                if let Some(Cell::Symbol(_)) = self.cell_at(x, y) {
                     has_symbol_adjecent = true;
                 }
             }
@@ -67,12 +69,37 @@ impl EngineSchematic for Vec<Vec<Cell>> {
         has_symbol_adjecent
     }
 
-    fn height(&self) -> usize {
-        self.len()
+    fn height(&self) -> isize {
+        self.len() as isize
     }
 
-    fn width(&self) -> usize {
-        self.get(0).map(|line| line.len()).unwrap_or(0)
+    fn read_part_number(&self, x: isize, y: isize) -> u64 {
+        let mut start = x;
+
+        while start > 0 {
+            if let Some(Cell::Digit(_)) = self.cell_at(start - 1, y) {
+                start -= 1;
+                continue;
+            } else {
+                break;
+            }
+        }
+
+        let mut n = 0;
+
+        for x in start..self.width() {
+            if let Some(Cell::Digit(d)) = self.cell_at(x, y) {
+                n = (n * 10) + (*d as u64);
+            } else {
+                break;
+            }
+        }
+
+        n
+    }
+
+    fn width(&self) -> isize {
+        self.get(0).map(|line| line.len() as isize).unwrap_or(0)
     }
 }
 
@@ -128,7 +155,76 @@ fn part1(input: &str) -> u64 {
     sum
 }
 
+#[aoc(day3, part2)]
+fn part2(input: &str) -> u64 {
+    let schematic = input
+        .split_whitespace()
+        .map(|line| {
+            line.chars()
+                .map(|c| Cell::from_char(c).unwrap())
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+
+    let mut sum = 0;
+
+    for y in 0..schematic.height() {
+        for x in 0..schematic.width() {
+            if let Some(Cell::Symbol('*')) = schematic.cell_at(x, y) {
+                let mut part_numbers = Vec::<u64>::new();
+
+                if let Some(Cell::Digit(_)) = schematic.cell_at(x - 1, y - 1) {
+                    part_numbers.push(schematic.read_part_number(x - 1, y - 1));
+
+                    if let Some(Cell::Empty) = schematic.cell_at(x, y - 1) {
+                        if let Some(Cell::Digit(_)) = schematic.cell_at(x + 1, y - 1) {
+                            part_numbers.push(schematic.read_part_number(x + 1, y - 1));
+                        }
+                    }
+                } else if let Some(Cell::Digit(_)) = schematic.cell_at(x, y - 1) {
+                    part_numbers.push(schematic.read_part_number(x, y - 1));
+                } else if let Some(Cell::Digit(_)) = schematic.cell_at(x + 1, y - 1) {
+                    part_numbers.push(schematic.read_part_number(x + 1, y - 1));
+                }
+
+                if let Some(Cell::Digit(_)) = schematic.cell_at(x - 1, y) {
+                    part_numbers.push(schematic.read_part_number(x - 1, y));
+                }
+
+                if let Some(Cell::Digit(_)) = schematic.cell_at(x + 1, y) {
+                    part_numbers.push(schematic.read_part_number(x + 1, y));
+                }
+
+                if let Some(Cell::Digit(_)) = schematic.cell_at(x - 1, y + 1) {
+                    part_numbers.push(schematic.read_part_number(x - 1, y + 1));
+
+                    if let Some(Cell::Empty) = schematic.cell_at(x, y + 1) {
+                        if let Some(Cell::Digit(_)) = schematic.cell_at(x + 1, y + 1) {
+                            part_numbers.push(schematic.read_part_number(x + 1, y + 1));
+                        }
+                    }
+                } else if let Some(Cell::Digit(_)) = schematic.cell_at(x, y + 1) {
+                    part_numbers.push(schematic.read_part_number(x, y + 1));
+                } else if let Some(Cell::Digit(_)) = schematic.cell_at(x + 1, y + 1) {
+                    part_numbers.push(schematic.read_part_number(x + 1, y + 1));
+                }
+
+                if part_numbers.len() == 2 {
+                    sum += part_numbers[0] * part_numbers[1];
+                }
+            }
+        }
+    }
+
+    sum
+}
+
 #[test]
 fn test_part1() {
     assert_eq!(part1("467..114..\n...*......\n..35..633.\n......#...\n617*......\n.....+.58.\n..592.....\n......755.\n...$.*....\n.664.598.."), 4361);
+}
+
+#[test]
+fn test_part2() {
+    assert_eq!(part2("467..114..\n...*......\n..35..633.\n......#...\n617*......\n.....+.58.\n..592.....\n......755.\n...$.*....\n.664.598.."), 467835);
 }
