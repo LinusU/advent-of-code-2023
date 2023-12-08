@@ -1,4 +1,4 @@
-use std::{collections::HashSet, str::FromStr};
+use std::str::FromStr;
 
 #[derive(Debug)]
 struct MapRange {
@@ -47,7 +47,7 @@ impl Map {
 
 #[derive(Debug)]
 struct Almanac {
-    seeds: HashSet<u64>,
+    seeds: Vec<u64>,
     maps: Vec<Map>,
 }
 
@@ -76,7 +76,7 @@ impl FromStr for Almanac {
             .unwrap()
             .split_whitespace()
             .map(|n| n.parse::<u64>().unwrap())
-            .collect::<HashSet<_>>();
+            .collect::<Vec<_>>();
 
         assert_eq!(lines.next().unwrap(), "");
 
@@ -112,7 +112,31 @@ pub fn part1(input: &str) -> u64 {
         .unwrap()
 }
 
+#[aoc(day5, part2)]
+pub fn part2(input: &str) -> u64 {
+    let almanac = input.parse::<Almanac>().unwrap();
+
+    let mut new_seeds = Vec::new();
+
+    for start_len in almanac.seeds.chunks_exact(2) {
+        for i in 0..start_len[1] {
+            new_seeds.push(start_len[0] + i);
+        }
+    }
+
+    new_seeds
+        .iter()
+        .map(|seed| almanac.map_seed_to_location(*seed))
+        .min()
+        .unwrap()
+}
+
 #[test]
 fn test_part1() {
     assert_eq!(part1("seeds: 79 14 55 13\n\nseed-to-soil map:\n50 98 2\n52 50 48\n\nsoil-to-fertilizer map:\n0 15 37\n37 52 2\n39 0 15\n\nfertilizer-to-water map:\n49 53 8\n0 11 42\n42 0 7\n57 7 4\n\nwater-to-light map:\n88 18 7\n18 25 70\n\nlight-to-temperature map:\n45 77 23\n81 45 19\n68 64 13\n\ntemperature-to-humidity map:\n0 69 1\n1 0 69\n\nhumidity-to-location map:\n60 56 37\n56 93 4"), 35);
+}
+
+#[test]
+fn test_part2() {
+    assert_eq!(part2("seeds: 79 14 55 13\n\nseed-to-soil map:\n50 98 2\n52 50 48\n\nsoil-to-fertilizer map:\n0 15 37\n37 52 2\n39 0 15\n\nfertilizer-to-water map:\n49 53 8\n0 11 42\n42 0 7\n57 7 4\n\nwater-to-light map:\n88 18 7\n18 25 70\n\nlight-to-temperature map:\n45 77 23\n81 45 19\n68 64 13\n\ntemperature-to-humidity map:\n0 69 1\n1 0 69\n\nhumidity-to-location map:\n60 56 37\n56 93 4"), 46);
 }
