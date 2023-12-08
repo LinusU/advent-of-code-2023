@@ -39,6 +39,16 @@ enum Card {
     Four,
     Three,
     Two,
+    Joker,
+}
+
+impl Card {
+    fn with_jokers(self) -> Self {
+        match self {
+            Card::Jack => Card::Joker,
+            card => card,
+        }
+    }
 }
 
 impl From<char> for Card {
@@ -83,18 +93,43 @@ impl Hand {
             *counts.entry(card).or_insert(0usize) += 1;
         }
 
+        let jokers = counts.remove(&Card::Joker).unwrap_or(0);
         let counts = counts.into_values().collect::<Vec<_>>().sorted();
 
-        match counts[..] {
-            [5] => HandKind::FiveOfAKind,
-            [1, 4] => HandKind::FourOfAKind,
-            [2, 3] => HandKind::FullHouse,
-            [1, 1, 3] => HandKind::ThreeOfAKind,
-            [1, 2, 2] => HandKind::TwoPair,
-            [1, 1, 1, 2] => HandKind::OnePair,
-            [1, 1, 1, 1, 1] => HandKind::HighCard,
+        match (jokers, &counts[..]) {
+            (4 | 5, _) => HandKind::FiveOfAKind,
+
+            (0, [5]) => HandKind::FiveOfAKind,
+            (1, [4]) => HandKind::FiveOfAKind,
+            (2, [3]) => HandKind::FiveOfAKind,
+            (3, [2]) => HandKind::FiveOfAKind,
+
+            (0, [1, 4]) => HandKind::FourOfAKind,
+            (1, [1, 3]) => HandKind::FourOfAKind,
+            (2, [1, 2]) => HandKind::FourOfAKind,
+            (3, [1, 1]) => HandKind::FourOfAKind,
+
+            (0, [2, 3]) => HandKind::FullHouse,
+            (1, [2, 2]) => HandKind::FullHouse,
+            (3, _) => HandKind::FullHouse,
+
+            (0, [1, 1, 3]) => HandKind::ThreeOfAKind,
+            (1, [1, 1, 2]) => HandKind::ThreeOfAKind,
+            (2, _) => HandKind::ThreeOfAKind,
+
+            (0, [1, 2, 2]) => HandKind::TwoPair,
+
+            (0, [1, 1, 1, 2]) => HandKind::OnePair,
+            (1, _) => HandKind::OnePair,
+
+            (0, [1, 1, 1, 1, 1]) => HandKind::HighCard,
+
             _ => unreachable!(),
         }
+    }
+
+    fn with_jokers(self) -> Self {
+        Self(self.0.map(Card::with_jokers))
     }
 }
 
@@ -131,10 +166,37 @@ pub fn part1(input: &str) -> usize {
         .sum()
 }
 
+#[aoc(day7, part2)]
+pub fn part2(input: &str) -> usize {
+    let input = input
+        .split('\n')
+        .map(|line| line.split_once(' ').unwrap())
+        .map(|(hand, bet)| (hand.parse::<Hand>().unwrap(), bet.parse::<usize>().unwrap()))
+        .map(|(hand, bet)| (hand.with_jokers(), bet))
+        .map(|(hand, bet)| (hand.kind(), hand.0, bet))
+        .collect::<Vec<_>>()
+        .sorted();
+
+    input
+        .iter()
+        .rev()
+        .enumerate()
+        .map(|(rank, (_, _, bet))| (rank + 1) * bet)
+        .sum()
+}
+
 #[test]
 fn test_part1() {
     assert_eq!(
         part1("32T3K 765\nT55J5 684\nKK677 28\nKTJJT 220\nQQQJA 483"),
         6440
+    );
+}
+
+#[test]
+fn test_part2() {
+    assert_eq!(
+        part2("32T3K 765\nT55J5 684\nKK677 28\nKTJJT 220\nQQQJA 483"),
+        5905
     );
 }
