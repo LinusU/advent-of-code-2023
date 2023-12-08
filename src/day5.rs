@@ -1,10 +1,32 @@
 use std::str::FromStr;
 
 #[derive(Debug)]
+struct SeedRange {
+    start: u64,
+    len: u64,
+}
+
+#[derive(Debug)]
 struct MapRange {
     dst_start: u64,
     src_start: u64,
     len: u64,
+}
+
+impl MapRange {
+    fn source_intersection(&self, other: &SeedRange) -> Option<SeedRange> {
+        let start = other.start.max(self.src_start);
+        let end = (other.start + other.len).min(self.src_start + self.len);
+
+        if start < end {
+            Some(SeedRange {
+                start,
+                len: end - start,
+            })
+        } else {
+            None
+        }
+    }
 }
 
 impl FromStr for MapRange {
@@ -43,6 +65,45 @@ impl Map {
 
         number
     }
+
+    fn map_ranges(&self, ranges: Vec<SeedRange>) -> Vec<SeedRange> {
+        let mut queue = ranges;
+        let mut result = Vec::new();
+
+        'outer: while let Some(range) = queue.pop() {
+            for map in self.0.iter() {
+                if let Some(intersection) = map.source_intersection(&range) {
+                    if intersection.start > range.start {
+                        queue.push(SeedRange {
+                            start: range.start,
+                            len: intersection.start - range.start,
+                        });
+                    }
+
+                    let intersection_end = intersection.start + intersection.len;
+                    let range_end = range.start + range.len;
+
+                    if intersection_end < range_end {
+                        queue.push(SeedRange {
+                            start: intersection_end,
+                            len: range_end - intersection_end,
+                        });
+                    }
+
+                    result.push(SeedRange {
+                        start: map.dst_start + (intersection.start - map.src_start),
+                        len: intersection.len,
+                    });
+
+                    continue 'outer;
+                }
+            }
+
+            result.push(range);
+        }
+
+        result
+    }
 }
 
 #[derive(Debug)]
@@ -57,6 +118,16 @@ impl Almanac {
 
         for map in self.maps.iter() {
             result = map.map_number(result);
+        }
+
+        result
+    }
+
+    fn map_seed_ranges_to_location(&self, seed_ranges: Vec<SeedRange>) -> Vec<SeedRange> {
+        let mut result = seed_ranges;
+
+        for map in self.maps.iter() {
+            result = map.map_ranges(result);
         }
 
         result
@@ -116,17 +187,20 @@ pub fn part1(input: &str) -> u64 {
 pub fn part2(input: &str) -> u64 {
     let almanac = input.parse::<Almanac>().unwrap();
 
-    let mut new_seeds = Vec::new();
+    let mut seed_ranges = Vec::new();
 
     for start_len in almanac.seeds.chunks_exact(2) {
-        for i in 0..start_len[1] {
-            new_seeds.push(start_len[0] + i);
-        }
+        seed_ranges.push(SeedRange {
+            start: start_len[0],
+            len: start_len[1],
+        });
     }
 
-    new_seeds
+    let location_ranges = almanac.map_seed_ranges_to_location(seed_ranges);
+
+    location_ranges
         .iter()
-        .map(|seed| almanac.map_seed_to_location(*seed))
+        .map(|range| range.start)
         .min()
         .unwrap()
 }
